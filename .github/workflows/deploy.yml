@@ -49,7 +49,7 @@ jobs:
           git add -A
           git diff --staged --quiet || git commit -m "style: auto-format with prettier [skip ci]"
           git push
-
+          
   deploy:
     name: Deploy
     runs-on: ubuntu-latest
@@ -80,16 +80,37 @@ jobs:
         run: |
           # Remove existing [vars] section and everything after it
           sed -i '/^\[vars\]/,$d' wrangler.toml
-
           # Add new [vars] section with GitHub Variable
           cat >> wrangler.toml << EOF
-
           [vars]
           ROUTES_CONFIG = '''${ROUTES_CONFIG}'''
           EOF
-
+          
       - name: Deploy to Cloudflare Workers
+        id: deploy  # 👈 ВАЖНО: добавляем ID для этого шага
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          
+      - name: Get Worker URL  # 👈 НОВЫЙ ШАГ
+        run: |
+          echo "🎉 Worker успешно задеплоен!"
+          echo "🌐 URL твоего прокси: https://ai-worker-proxy.${{ secrets.CLOUDFLARE_ACCOUNT_ID }}.workers.dev"
+          echo ""
+          echo "📝 Добавь этот URL в код анализатора:"
+          echo 'self.client = OpenAI('
+          echo '    api_key=Config.OPENAI_API_KEY,'
+          echo '    base_url="https://ai-worker-proxy.${{ secrets.CLOUDFLARE_ACCOUNT_ID }}.workers.dev/v1",'
+          echo '    http_client=http_client'
+          echo ')'
+          
+      - name: Save URL to file  # 👈 ЕЩЁ ОДИН ПОЛЕЗНЫЙ ШАГ
+        run: |
+          echo "https://ai-worker-proxy.${{ secrets.CLOUDFLARE_ACCOUNT_ID }}.workers.dev" > worker-url.txt
+          
+      - name: Upload URL as artifact  # 👈 СОХРАНЯЕМ URL КАК ФАЙЛ
+        uses: actions/upload-artifact@v4
+        with:
+          name: worker-url
+          path: worker-url.txt
